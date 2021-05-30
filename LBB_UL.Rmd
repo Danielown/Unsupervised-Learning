@@ -1,0 +1,289 @@
+---
+title: "Unsupervised Learning: Spotify Clustering Analysis"
+author: "Daniel Lumban Gaol"
+date: "5/18/2021"
+output: 
+  html_document:
+    theme: flatly
+    higlight: zenburn
+    toc: true
+    toc_float:
+      collapsed: false
+    number_sections: true
+    df_print: paged
+---
+
+
+
+```{r setup, include=FALSE}
+# clear-up the environment
+rm(list = ls())
+
+# chunk options
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  comment = "#>"
+)
+
+options(scipen = 999)
+```
+
+# Import Library
+
+```{r}
+library(dplyr)
+library(GGally)
+library(gridExtra)
+library(factoextra)
+library(FactoMineR)
+library(plotly)
+```
+
+# Case
+Spotify adalah salah satu layanan streaming musik digital yang memberikan akses ke jutaan lagu di sekuruh dunia, pada penelitian ini bertujuan untuk melakukan klustering dan mengetahui fitur audio dominan di setiap klusternya dan melakukan reduksi dimensi data (`PCA`) dengan menganalisa pola untuk mendapatkan informasi dengan menggunakan 150 sample data lagu spotify
+
+```{r, out.width = "100%", echo = FALSE, fig.align = "center"}
+knitr::include_graphics("spot.jpg")
+```
+
+# Read Data
+```{r}
+spotify <- read.csv("SpotifyFeatures.csv")
+head(spotify)
+```
+
+```{r}
+glimpse(spotify)
+```
+> Deskripsi Data :
+
+genre : Genre Musik   
+artist_name : Nama artis   
+track_name : Judul lagu   
+track_id : Id lagu   
+popularity : Kepopuleran lagu    
+acousticness : Tingkat keakustikan lagu   
+danceability : Tingkat ideal lagu untuk membuat pendengar menari   
+duration_ms : Durasi lagu dalam (milliseconds)   
+energy : Tingkat energi lagu   
+instrumentalness : Ragam instrumen yang dipakai dalam sebuah lagu      
+key : chord awal lagu dimulai   
+liveness : produksi musik dengan perandaian ketika lagu ditampilkan secara langsung   
+loudness : Tingkat kenyaringan lagu   
+mode : menggunakan nada yang sama dengan major standar namun dengan cara baru     
+speechiness ; Kerapatan kata dalm lagu   
+tempo : Tingkat cepat atau lambat sebuah lagu   
+time_signature : Birama   
+valence : Emosi yang dimunculkan sebuah lagu   
+
+
+# Data Wrangling
+
+```{r}
+spotify <- spotify %>% 
+  mutate_at(vars(ï..genre,key,mode,time_signature),as.factor)
+head(spotify)
+```
+
+```{r}
+names(spotify)[names(spotify) == "ï..genre"] <- "genre"
+```
+
+```{r}
+#check missing value
+anyNA(spotify)
+```
+
+```{r}
+spotify <- spotify[1:150,]
+```
+
+
+
+```{r}
+#Mengambil data variabel numerik untuk melakukan scaling data
+spotify_clean <- spotify%>% 
+                 select_if(is.numeric)
+
+head(spotify_clean)
+```
+
+
+
+```{r}
+summary(spotify_clean)
+```
+```{r}
+cov(spotify_clean[1:4])
+```
+
+Dari hasil diatas variance dari masing-masing variabel berbeda jauh karena range/skala dari tiap variabel berbeda, begitupun covariance. **Nilai variance dan covariance dipengaruhi oleh skala dari data**. Semakin tinggi skala, nilai variance atau covariance akan semakin tinggi.
+
+
+> Scaling data
+
+```{r}
+spotify_scale <- scale(spotify_clean) %>% 
+  as.data.frame()
+spotify_scale
+```
+
+
+# Exploratory Data Analysis
+
+```{r}
+ggcorr(spotify_scale,low = 'green', high = 'darkblue',
+       label = TRUE, label_size = 2.5, hjust = 1, layout.exp = 3)
+```
+Analisa dari grafik korelasi diatas memberikan informasi bahwa ada beberapa variabel yang memiliki korelasi cukup kuat yaitu pada variabel `energy` dengan `loudness`, `danceablility` dengan `valence` dan `energy` dengan `valence`
+hal tersebut dapat diatasi dengan melakukan (`PCA`) agar menghilangkan sifat multikolinearitas pada data, dan mengunragi dimensi data tetapi dapat merangkum informasi sebanyak mungkin. Hasil dari analisis tersebut dapat dimanfaatkan untuk melakukan klasifikasi
+
+# Clustering 
+
+## Mencari nilai K optimum 
+
+```{r}
+fviz_nbclust(spotify_scale, kmeans, method = "wss") + labs(subtitle = "wss method")
+```
+```{r}
+fviz_nbclust(spotify_scale, kmeans, "silhouette", k.max = 10) + labs(subtitle = "Silhouette method")
+```
+
+
+Berdasarkan dari analisis `silhouette method` dan `wss` K optimum berada di nilai 7, Maka cluster akan dibuat menjadi 7 kelas
+
+# K-Means Clustering
+```{r}
+set.seed(100)
+spotify_means <- kmeans(spotify_scale,7)
+```   
+
+
+## Interpretasi/Cluster Profiling
+```{r}
+#memasukan label cluster ke data scale
+spotify_scale$cluster <- as.factor(spotify_means$cluster)
+head(spotify_scale)
+```
+
+
+## CLuster Profiling
+```{r}
+spotify_scale %>% 
+  group_by(cluster) %>% 
+  summarise_all(mean)
+```
+Dengan mengambil nilai rata - rata dari setiap kluster, sekarang kita dapat mengetahui karakteristik dari setiap kluster :      
+kluster 1 : lagu bersifat akustik, memiliki danceability untuk pendengar, durasi lagu rendah dan memiliki valence   
+kluster 2 : lagu memiliki popularity yang tinggi, tidak bersifat akustik, bersifat nyaring/loudness dan tempo cepat   
+kluster 3 : lagu bersifat akustik, memiliki dancebility yang rendah, bersifat instrumentalness   
+kluster 4 : lagu bersifat danceability serta memiliki durasi yang cukup lama serta bersifat speechiness   
+kluster 5 : lagu memiliki durasi yang rendah dan berenergy, dan memiliki liveness   
+kluster 6 : lagu tidak bersifat akustik, memiliki energy, loudness dan memiliki valence   
+kluster 7 : lagu bersifat akustik, dan memiliki tingkat valence yang rendah   
+
+
+```{r}
+#Visualisasi CLustering
+fviz_cluster(object = spotify_means,
+             data = spotify_scale[,-12])
+```
+
+# PCA
+
+```{r}
+pca <- spotify %>% 
+  select_if(is.numeric)
+pca$genre <- spotify$genre
+```
+
+
+PCA tidak hanya berguna untuk dimensionality reduction namun baik untuk visualisasi high-dimensional data. Visualisasi dapat menggunakan **biplot** yang menampilkan:
+
+```{r}
+#Melakukan PCA dengan FactomineR
+spotify_pca <- PCA(spotify_scale, quali.sup =12)
+```
+Dari grafik PCA diatas terbagi menjadi 2 PC, karena dari hasil reduksi dimensi tersebut PC 1 dan PC 2 akan merangkum informasi paling banyak, sehingga jika diaplikasikan kedalam biplot PC1 = sumbu x, sedangkan PC2 = sumbu y.   
+
+Insight :   
+- PC1 paling banyak merangkum variabel : acousticness,instrumentalness,danceability,valence,energy,loudness   
+- PC2 paling banyak merangkum variabel : speechiness,duration_ms,liveness,popularity,tempo   
+
+
+```{r}
+fviz_eig(spotify_pca, ncp = 10, addlabels = T, main = "Variance explained by each dimensions")
+```
+Jika dibuat kedalam grafik, dapat dibuktikan bahwa informasi paling tinggi berada di dimensi 1 dan 2 atau PC1 dan PC2
+
+```{r}
+spotify_pca$eig
+```
+
+```{r}
+#Membuat data frame baru dari hasil PCA 
+spotify_keep <- PCA(spotify_scale, graph = F, ncp = 6, quali.sup = 12)$ind$coord %>% as.data.frame()
+spotify_x <- spotify_keep %>%
+  bind_cols(cluster = as.factor(spotify_means$cluster))
+head(spotify_x)
+```
+
+Dari hasil dimension reduction diatas mengambil 6 dimensi karena untuk mendaptkan informasi sebanyak 80%, yang didapatkan dari cummulative of percentage variance.
+
+
+# Observasi PCA
+```{r fig.width= 11}
+fviz_pca_ind(spotify_pca, habillage = 12, addEllipses = T)
+```
+
+> Data outlier
+
+```{r}
+spotify[c(16,55,97,115),]
+```
+Dari hasil diatas didapetkan bahwa data outlier dari genre movie, berada di cluster 4, sesuai dengan profiling kluster diatas, lagu outlier tersebut bersifat danceability serta memiliki durasi yang cukup lama serta bersifat speechiness yang tinggi.
+
+```{r}
+spotify_viz <- spotify_keep %>%
+  bind_cols(cluster = as.factor(spotify_means$cluster))
+head(spotify_viz)
+```
+
+
+>  Menggunakan plotly untuk melihat visual data PCA dengan 3 Dimensi
+
+```{r}
+plot_ly(spotify_viz, x = ~Dim.1, y = ~Dim.2, z = ~Dim.3, color = ~cluster, colors = c('black','blue',"yellow","green","red","magenta","brown")) %>%
+  add_markers() %>% 
+   layout(scene = list(xaxis = list(title = 'Dim.1'),
+                     yaxis = list(title = 'Dim.2'),
+                     zaxis = list(title = 'Dim.3')))
+```
+
+# Kesimpulan 
+
+1. Dari hasil analisis klustering didapatkan bahwa terdapat 7 kluster dengan karakteristiknya masing - masing, jika dilihat dari segi bisnis industri musik, lagu - lagu dengan tingkat populer yang tinggi berada di kluster 2 dengan karakter lagu tidak bersifat akustik dan memiliki tingkat kenyaringan yang tinggi dan memiliki tempo yang cepat   
+
+
+2. Dalam melakukan reduksi dimensi kita dapat memilih semua PC, pada pemilihan nilai variabel PC diatas mengambil 6 variabel PC dengan mempertahankan 80% informasi dari data aslinya, yang dimana data tersebut dapat dilanjutkan dengan model supervised machine learning.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
