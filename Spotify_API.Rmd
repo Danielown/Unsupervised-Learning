@@ -1,0 +1,144 @@
+---
+title: "API Spotify"
+author: "Daniel"
+date: "5/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# clear-up the environment
+rm(list = ls())
+
+# chunk options
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  comment = "#>"
+)
+
+options(scipen = 999)
+```
+
+
+```{r}
+#Library
+library(spotidy)    #to connect R studio with the developer features
+library(tidyr)      #to change and solve structural issues
+library(tidyverse)  #an extension of the tidy package with an API design
+library(dplyr)      #to provide flexible grammar for data manipulation
+library(DT)         #to present data frame results as a data table
+```
+
+```{r}
+id <- "e11915b72acf4bdba852736533b70af1"
+secret <- "31842ff67f0148af99ee3b74e2f843bf"
+```
+
+
+```{r}
+Sys.setenv(SPOTIFY_CLIENT_ID = id )
+Sys.setenv(SPOTIFY_CLIENT_SECRET = secret)
+```
+
+```{r}
+library(httr)
+
+response = POST(
+  'https://accounts.spotify.com/api/token',
+  accept_json(),
+  authenticate(id, secret),
+  body = list(grant_type = 'client_credentials'),
+  encode = 'form',
+  verbose()
+)
+```
+
+
+```{r}
+mytoken = content(response)$access_token
+HeaderValue = paste0('Bearer ', mytoken)
+```
+
+
+```{r}
+for(i in 1:nrow(tracks_list)){
+  Sys.sleep(0.10)
+  track_URI2 = paste0('https://api.spotify.com/v1/audio-features/',   
+    tracks_list$id[i])
+  track_response2 = GET(url = track_URI2, 
+    add_headers(Authorization = HeaderValue))
+  tracks2 = content(track_response2)
+  
+  tracks_list$key[i] <- tracks2$key
+  tracks_list$mode[i] <- tracks2$mode
+  tracks_list$time_signature[i] <- tracks2$time_signature
+  tracks_list$acousticness[i] <- tracks2$acousticness
+  tracks_list$danceability[i] <- tracks2$danceability
+  tracks_list$energy[i] <- tracks2$energy
+  tracks_list$instrumentalness[i] <- tracks2$instrumentalness
+  tracks_list$liveliness[i] <- tracks2$liveness
+  tracks_list$loudness[i] <- tracks2$loudness
+  tracks_list$speechiness[i] <- tracks2$speechiness
+  tracks_list$valence[i] <- tracks2$valence
+  tracks_list$tempo[i] <- tracks2$tempo
+}
+```
+```{r}
+artistID = "06HL4z0CvFAxyc27GXpf02"
+URI = paste0('https://api.spotify.com/v1/artists/', artistID)
+response2 = GET(url = URI, add_headers(Authorization = HeaderValue))
+Artist = content(response2)
+```
+
+
+```{r}
+albumID = "1NAmidJlEaVgA3MpcPFYGq"
+track_URI = paste0('https://api.spotify.com/v1/albums/', albumID,'/tracks')
+track_response = GET(url = track_URI, add_headers(Authorization = HeaderValue))
+tracks = content(track_response)
+```
+
+
+
+```{r}
+ntracks = length(tracks$items)
+tracks_list<-data.frame(
+  name=character(ntracks),
+  id=character(ntracks),
+  artist=character(ntracks),
+  disc_number=numeric(ntracks),
+  track_number=numeric(ntracks),
+  duration_ms=numeric(ntracks),
+  stringsAsFactors=FALSE
+)
+```
+
+
+
+```{r}
+for(i in 1:ntracks){
+  tracks_list[i,]$id <- tracks$items[[i]]$id
+  tracks_list[i,]$name <- tracks$items[[i]]$name
+  tracks_list[i,]$artist <- tracks$items[[i]]$artists[[1]]$name
+  tracks_list[i,]$disc_number <- tracks$items[[i]]$disc_number
+  tracks_list[i,]$track_number <- tracks$items[[i]]$track_number
+  tracks_list[i,]$duration_ms <- tracks$items[[i]]$duration_ms
+}
+```
+
+
+```{r}
+tracks_list
+```
+
+
+
+
+
+
+
+
+
+
+
